@@ -47,6 +47,11 @@ class SupervisorDecision(StrEnum):
     REQUEST_HUMAN = "REQUEST_HUMAN"
 
 
+class ResearchMode(StrEnum):
+    EVIDENCE_REVIEW = "EVIDENCE_REVIEW"
+    IDEA_EXPLORATION = "IDEA_EXPLORATION"
+
+
 class Hypothesis(BaseModel):
     hypothesis_id: str = Field(default_factory=lambda: new_id("hypothesis"))
     statement: str
@@ -134,6 +139,11 @@ class EvidenceClaim(BaseModel):
 class ResearchState(BaseModel):
     research_id: str = Field(default_factory=lambda: new_id("research"))
     original_user_request: str
+    mode: ResearchMode = ResearchMode.EVIDENCE_REVIEW
+    explored_idea: str | None = None
+    mechanism_map: list[str] = Field(default_factory=list)
+    bridge_inferences: list[dict[str, Any]] = Field(default_factory=list)
+    falsification_tests: list[str] = Field(default_factory=list)
     primary_question: str = ""
     research_plan: ResearchPlan | None = None
     active_hypotheses: list[Hypothesis] = Field(default_factory=list)
@@ -165,4 +175,10 @@ class ResearchState(BaseModel):
 
 class ResearchCreateRequest(BaseModel):
     question: str
+    mode: ResearchMode = ResearchMode.EVIDENCE_REVIEW
+
+
+
+
+
 

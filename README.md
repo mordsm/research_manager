@@ -28,6 +28,19 @@ Current source targets:
 - NIH Office of Autoimmune Disease Research: NIH-wide autoimmune disease strategy, mechanisms, sex differences, and immune dysregulation.
 - Michael J. Fox Foundation: Parkinson's biomarkers, genetics, therapeutic pipeline, PPMI, prevention, and progression research.
 The current reports are research-organization support only. They are not diagnosis or treatment advice.
+
+## Idea Exploration
+
+Use `IDEA_EXPLORATION` when the input is a hypothesis or cross-study idea rather than a direct evidence-review question. The report will add mechanism mapping, bridge inferences, and falsification tests so indirect conclusions stay separate from direct evidence.
+
+Example request body:
+
+```json
+{
+  "question": "Could gut inflammation connect autoimmune disease and Parkinson's disease?",
+  "mode": "IDEA_EXPLORATION"
+}
+```
 ## Run
 
 ```powershell
@@ -41,6 +54,8 @@ uv run uvicorn app.main:app --reload --port 8020
 ```powershell
 uv run pytest
 ```
+
+
 
 
 

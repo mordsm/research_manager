@@ -18,7 +18,7 @@ def create_app() -> FastAPI:
     @app.post("/research", response_model=ResearchState)
     def create_research(request: ResearchCreateRequest) -> ResearchState:
         init_db()
-        state = ResearchState(original_user_request=request.question)
+        state = ResearchState(original_user_request=request.question, mode=request.mode)
         state = run_research_graph(state)
         return store.save(state)
 
@@ -50,4 +50,5 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
 

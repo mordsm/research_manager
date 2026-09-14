@@ -66,3 +66,25 @@ def test_medical_research_report_names_sources_and_safety_boundary():
     assert "not diagnosis or treatment advice" in result.final_report
 
 
+
+
+def test_idea_exploration_mode_creates_bridge_inference_and_falsification_tests():
+    from app.schemas.research import ResearchMode
+
+    state = ResearchState(
+        original_user_request="Could gut inflammation connect autoimmune disease and Parkinson's?",
+        mode=ResearchMode.IDEA_EXPLORATION,
+    )
+
+    result = run_research_graph(state)
+
+    assert result.mode == ResearchMode.IDEA_EXPLORATION
+    assert result.explored_idea == "Could gut inflammation connect autoimmune disease and Parkinson's?"
+    assert result.mechanism_map
+    assert result.bridge_inferences
+    assert result.falsification_tests
+    assert result.final_report is not None
+    assert "## Idea Exploration" in result.final_report
+    assert "## Bridge Inferences" in result.final_report
+    assert "## Falsification Tests" in result.final_report
+

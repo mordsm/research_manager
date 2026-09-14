@@ -16,6 +16,7 @@ from app.schemas.research import (
     ResearchPlan,
     ResearchState,
     StudyRecord,
+    ResearchMode,
     SupervisorDecision,
 )
 
@@ -64,11 +65,11 @@ def planner(graph_state: GraphState) -> GraphState:
         inclusion_criteria=["Material to the illness, treatment, or outcome question", "Traceable PMID, NCT ID, DOI, URL, or source ID", "Human clinical relevance when available", "Safety, adverse-event, and contraindication information when available"],
         exclusion_criteria=["Duplicate source IDs", "Untraceable claims", "Treatment claims without identifiable evidence", "Content that presents medical advice without research support"],
         evidence_quality_criteria=["Directness", "study design", "risk of bias", "sample size", "clinical significance", "safety reporting", "citation verification"],
-        branch_candidates=["published literature branch", "clinical trials branch", "complementary medicine branch", "safety and contraindications branch"],
+        branch_candidates=["published literature branch", "clinical trials branch", "complementary medicine branch", "safety and contraindications branch", "mechanism bridge branch", "falsification branch"],
         stop_policy={"max_iterations": get_settings().max_iterations},
     )
     state.active_hypotheses = [hypothesis]
-    state.candidate_branches = ["published literature branch", "clinical trials branch", "complementary medicine branch", "safety and contraindications branch"]
+    state.candidate_branches = ["published literature branch", "clinical trials branch", "complementary medicine branch", "safety and contraindications branch", "mechanism bridge branch", "falsification branch"]
     state.active_branches = ["published literature branch", "clinical trials branch", "complementary medicine branch"]
     state.unknowns.append("Phase 1 does not yet access live PubMed, ClinicalTrials.gov, or NCCIH databases.")
     return _dump(state)
@@ -120,17 +121,53 @@ def critic(graph_state: GraphState) -> GraphState:
     return _dump(state)
 
 
+
+def explore_idea(state: ResearchState) -> None:
+    if state.mode != ResearchMode.IDEA_EXPLORATION:
+        return
+
+    state.explored_idea = state.explored_idea or state.primary_question
+    if not state.mechanism_map:
+        state.mechanism_map = [
+            "Identify biological mechanisms that could connect the idea to the illness or outcome.",
+            "Separate direct evidence from indirect mechanism evidence.",
+            "Track whether each mechanism is human clinical evidence, animal evidence, cellular evidence, or hypothesis only.",
+        ]
+    if not state.bridge_inferences:
+        source_ids = [study.source_id for study in state.included_studies]
+        state.bridge_inferences.append(
+            {
+                "inference_id": "BI1",
+                "idea": state.explored_idea,
+                "text": "This is a bridge inference: it may connect findings across sources, but it is not treated as proven direct evidence.",
+                "direct_evidence": [study.study_id for study in state.included_studies if study.directness == "DIRECT"],
+                "indirect_evidence": [study.study_id for study in state.included_studies if study.directness != "DIRECT"],
+                "confidence": "LOW_UNTIL_LIVE_SOURCES_AND_DIRECT_STUDIES_ARE_VERIFIED",
+                "source_ids": source_ids,
+            }
+        )
+    if not state.falsification_tests:
+        state.falsification_tests = [
+            "Look for direct studies that tested the idea and found no effect or the opposite effect.",
+            "Look for safer or simpler explanations that account for the same findings.",
+            "Check whether the proposed mechanism appears in humans, not only animal or cell models.",
+            "Check whether benefits are clinically meaningful and replicated by independent groups.",
+        ]
+
+
 def synthesizer(graph_state: GraphState) -> GraphState:
     state = _load(graph_state)
+    explore_idea(state)
     source_ids = [study.source_id for study in state.included_studies]
     direct_count = sum(1 for study in state.included_studies if study.directness == "DIRECT")
     indirect_count = max(0, len(state.included_studies) - direct_count)
     support = [study.study_id for study in state.included_studies if study.directness == "DIRECT"]
     contradict = [study.study_id for study in state.included_studies if study.directness != "DIRECT"]
+    claim_prefix = "Idea exploration" if state.mode == ResearchMode.IDEA_EXPLORATION else "Phase 1 medical-source mock evidence"
 
     claim = EvidenceClaim(
         claim_id="C1",
-        text=f"Phase 1 medical-source mock evidence provides a traceable but low-confidence treatment research synthesis for: {state.primary_question}",
+        text=f"{claim_prefix} provides a traceable but low-confidence treatment research synthesis for: {state.primary_question}",
         claim_type=ClaimType.INFERENCE,
         supporting_studies=support,
         contradicting_studies=contradict,
@@ -148,7 +185,6 @@ def synthesizer(graph_state: GraphState) -> GraphState:
     state.current_conclusion = claim.text
     state.current_confidence = float(claim.confidence_score)
     return _dump(state)
-
 
 def supervisor(graph_state: GraphState) -> GraphState:
     state = _load(graph_state)
@@ -183,6 +219,31 @@ def generate_final_report(state: ResearchState) -> str:
         for claim in state.claims
     )
     reference_lines = "\n".join(f"- {study.study_id}: {study.citation} ({study.source_id})" for study in state.included_studies)
+    bridge_lines = "\n".join(
+        f"- {item.get('inference_id', 'BI')}: {item.get('text', '')} | confidence: {item.get('confidence', 'UNKNOWN')}"
+        for item in state.bridge_inferences
+    )
+    mechanism_lines = "\n".join(f"- {item}" for item in state.mechanism_map)
+    falsification_lines = "\n".join(f"- {item}" for item in state.falsification_tests)
+    idea_section = ""
+    if state.mode == ResearchMode.IDEA_EXPLORATION:
+        idea_section = f"""
+## Idea Exploration
+
+Explored idea: {state.explored_idea or state.primary_question}
+
+## Mechanism Map
+
+{mechanism_lines or '- No mechanism map generated.'}
+
+## Bridge Inferences
+
+{bridge_lines or '- No bridge inferences generated.'}
+
+## Falsification Tests
+
+{falsification_lines or '- No falsification tests generated.'}
+"""
     return f"""# Final Research Report
 
 ## Research Question
@@ -200,7 +261,7 @@ Phase 1 LangGraph orchestration with mocked medical-source adapters for PubMed, 
 ## Complementary Medicine Domains
 
 {chr(10).join('- ' + domain for domain in COMPLEMENTARY_MEDICINE_DOMAINS)}
-
+{idea_section}
 ## Key Claims
 
 {claim_lines}
@@ -243,6 +304,13 @@ def build_research_graph():
 def run_research_graph(state: ResearchState) -> ResearchState:
     result = build_research_graph().invoke({"research": state.model_dump(mode="json")})
     return ResearchState.model_validate(result["research"])
+
+
+
+
+
+
+
 
 
 
