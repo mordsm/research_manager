@@ -5,6 +5,7 @@ from typing import Literal, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.config import get_settings
+from app.medical_sources import COMPLEMENTARY_MEDICINE_DOMAINS, source_focus_lines, source_names
 from app.mock_search import mocked_search
 from app.schemas.research import (
     ClaimType,
@@ -41,11 +42,11 @@ def planner(graph_state: GraphState) -> GraphState:
         hypothesis_id="H1",
         statement=f"The available evidence can answer: {primary_question}",
         origin="planner",
-        assumptions=["Phase 1 uses mocked search results."],
-        unknowns=["Real database coverage is unavailable in Phase 1."],
+        assumptions=["Phase 1 uses mocked medical-source search results."],
+        unknowns=["Live database coverage is unavailable until PubMed, ClinicalTrials.gov, and NCCIH connectors are wired."],
         falsification_conditions=["High-quality contradictory evidence outweighs supporting evidence."],
-        proposed_test="Replace mocked search with real literature database search.",
-        proposed_experiment="Run the same plan against PubMed/Crossref in a later phase.",
+        proposed_test="Replace mocked source adapters with live PubMed, ClinicalTrials.gov, and NCCIH searches.",
+        proposed_experiment="Run the same plan against PubMed, ClinicalTrials.gov, and NCCIH in a later phase.",
         confidence=10,
         status=HypothesisStatus.ACTIVE,
     )
@@ -53,22 +54,23 @@ def planner(graph_state: GraphState) -> GraphState:
     state.research_plan = ResearchPlan(
         primary_question=primary_question,
         secondary_questions=[
-            "What direct evidence is available?",
-            "What contradictory or bias-sensitive evidence is available?",
-            "What remains unknown after this iteration?",
+            "What published evidence exists in PubMed?",
+            "What registered or completed trials exist in ClinicalTrials.gov?",
+            "What complementary, integrative, exercise, yoga, nutrition, or mind-body evidence exists?",
+            "What safety concerns, contraindications, or evidence gaps remain?",
         ],
         hypotheses=[hypothesis],
-        search_domains=["mocked direct evidence", "mocked contradictory evidence"],
-        inclusion_criteria=["Material to the research question", "Traceable source ID"],
-        exclusion_criteria=["Duplicate source IDs", "Untraceable claims"],
-        evidence_quality_criteria=["Directness", "risk of bias", "citation verification"],
-        branch_candidates=["direct evidence branch", "contradictory evidence branch"],
+        search_domains=source_names() + COMPLEMENTARY_MEDICINE_DOMAINS,
+        inclusion_criteria=["Material to the illness, treatment, or outcome question", "Traceable PMID, NCT ID, DOI, URL, or source ID", "Human clinical relevance when available", "Safety, adverse-event, and contraindication information when available"],
+        exclusion_criteria=["Duplicate source IDs", "Untraceable claims", "Treatment claims without identifiable evidence", "Content that presents medical advice without research support"],
+        evidence_quality_criteria=["Directness", "study design", "risk of bias", "sample size", "clinical significance", "safety reporting", "citation verification"],
+        branch_candidates=["published literature branch", "clinical trials branch", "complementary medicine branch", "safety and contraindications branch"],
         stop_policy={"max_iterations": get_settings().max_iterations},
     )
     state.active_hypotheses = [hypothesis]
-    state.candidate_branches = ["direct evidence branch", "contradictory evidence branch"]
-    state.active_branches = ["direct evidence branch"]
-    state.unknowns.append("Phase 1 does not access real literature databases.")
+    state.candidate_branches = ["published literature branch", "clinical trials branch", "complementary medicine branch", "safety and contraindications branch"]
+    state.active_branches = ["published literature branch", "clinical trials branch", "complementary medicine branch"]
+    state.unknowns.append("Phase 1 does not yet access live PubMed, ClinicalTrials.gov, or NCCIH databases.")
     return _dump(state)
 
 
@@ -100,7 +102,7 @@ def evidence_analyst(graph_state: GraphState) -> GraphState:
                 study_type=source.get("study_type", "UNKNOWN"),
                 primary_outcomes=[source["result"]],
                 directness=source["directness"],
-                major_limitations=["Mocked source; citation not externally verified."],
+                major_limitations=["Mocked source adapter; citation not externally verified yet."],
                 evidence_weight=EvidenceStrength.LOW,
                 fulltext_available=False,
                 citation_verified=False,
@@ -111,10 +113,10 @@ def evidence_analyst(graph_state: GraphState) -> GraphState:
 
 def critic(graph_state: GraphState) -> GraphState:
     state = _load(graph_state)
-    if "Mock evidence cannot establish real-world truth." not in state.contradictions:
-        state.contradictions.append("Mock evidence cannot establish real-world truth.")
-    if "Citation verification is unavailable in Phase 1." not in state.unknowns:
-        state.unknowns.append("Citation verification is unavailable in Phase 1.")
+    if "Mock medical evidence cannot establish real-world treatment safety or effectiveness." not in state.contradictions:
+        state.contradictions.append("Mock medical evidence cannot establish real-world treatment safety or effectiveness.")
+    if "Citation and trial-registry verification are unavailable in Phase 1." not in state.unknowns:
+        state.unknowns.append("Citation and trial-registry verification are unavailable in Phase 1.")
     return _dump(state)
 
 
@@ -128,7 +130,7 @@ def synthesizer(graph_state: GraphState) -> GraphState:
 
     claim = EvidenceClaim(
         claim_id="C1",
-        text=f"Phase 1 mock evidence provides a traceable but low-confidence synthesis for: {state.primary_question}",
+        text=f"Phase 1 medical-source mock evidence provides a traceable but low-confidence treatment research synthesis for: {state.primary_question}",
         claim_type=ClaimType.INFERENCE,
         supporting_studies=support,
         contradicting_studies=contradict,
@@ -136,9 +138,9 @@ def synthesizer(graph_state: GraphState) -> GraphState:
         indirect_evidence_count=indirect_count,
         evidence_strength=EvidenceStrength.LOW if source_ids else EvidenceStrength.INSUFFICIENT,
         confidence_score=30 if source_ids else 0,
-        assumptions=["Executor uses mocked search results."],
+        assumptions=["Executor uses mocked medical-source adapters."],
         unknowns=state.unknowns,
-        alternative_explanations=["The answer may change when real databases are searched."],
+        alternative_explanations=["The treatment picture may change when live medical databases are searched."],
         traceability={"source_ids": source_ids},
         review_status="CRITIC_REVIEWED",
     )
@@ -189,7 +191,15 @@ def generate_final_report(state: ResearchState) -> str:
 
 ## Research Method
 
-Phase 1 LangGraph orchestration with mocked search results. Workflow: planner -> executor -> evidence_analyst -> critic -> synthesizer -> supervisor.
+Phase 1 LangGraph orchestration with mocked medical-source adapters for PubMed, ClinicalTrials.gov, and NCCIH. Workflow: planner -> executor -> evidence_analyst -> critic -> synthesizer -> supervisor.
+
+## Search Sources
+
+{chr(10).join('- ' + line for line in source_focus_lines())}
+
+## Complementary Medicine Domains
+
+{chr(10).join('- ' + domain for domain in COMPLEMENTARY_MEDICINE_DOMAINS)}
 
 ## Key Claims
 
@@ -197,9 +207,10 @@ Phase 1 LangGraph orchestration with mocked search results. Workflow: planner ->
 
 ## Limitations
 
-- Executor used mocked results only.
-- Citation verification is unavailable in Phase 1.
-- No real literature databases were searched.
+- Executor used mocked medical-source adapters only.
+- Citation and trial-registry verification are unavailable in Phase 1.
+- No live medical literature or trial databases were searched yet.
+- This is research organization support, not diagnosis or treatment advice.
 
 ## Why Research Stopped
 
@@ -232,4 +243,7 @@ def build_research_graph():
 def run_research_graph(state: ResearchState) -> ResearchState:
     result = build_research_graph().invoke({"research": state.model_dump(mode="json")})
     return ResearchState.model_validate(result["research"])
+
+
+
 

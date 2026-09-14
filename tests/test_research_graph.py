@@ -38,3 +38,31 @@ def test_claim_evidence_traceability():
     assert set(claim.traceability["source_ids"]).issubset(study_source_ids)
     assert claim.supporting_studies or claim.contradicting_studies
 
+
+
+def test_medical_research_sources_and_complementary_domains_are_planned():
+    state = ResearchState(original_user_request="What new treatments may help chronic migraine?")
+
+    result = run_research_graph(state)
+
+    assert result.research_plan is not None
+    assert "PubMed" in result.research_plan.search_domains
+    assert "ClinicalTrials.gov" in result.research_plan.search_domains
+    assert "NCCIH" in result.research_plan.search_domains
+    assert "exercise and supervised physical activity" in result.research_plan.search_domains
+    assert "yoga and breathwork" in result.research_plan.search_domains
+
+
+def test_medical_research_report_names_sources_and_safety_boundary():
+    state = ResearchState(original_user_request="What alternative treatments may help insomnia?")
+
+    result = run_research_graph(state)
+
+    assert result.final_report is not None
+    assert "PubMed" in result.final_report
+    assert "ClinicalTrials.gov" in result.final_report
+    assert "NCCIH" in result.final_report
+    assert "yoga and breathwork" in result.final_report
+    assert "not diagnosis or treatment advice" in result.final_report
+
+
