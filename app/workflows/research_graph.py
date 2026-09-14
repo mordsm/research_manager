@@ -6,6 +6,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.config import get_settings
 from app.medical_sources import COMPLEMENTARY_MEDICINE_DOMAINS, source_focus_lines, source_names
+from app.live_search import live_medical_search
 from app.mock_search import mocked_search
 from app.schemas.research import (
     ClaimType,
@@ -78,7 +79,16 @@ def planner(graph_state: GraphState) -> GraphState:
 def executor(graph_state: GraphState) -> GraphState:
     state = _load(graph_state)
     next_iteration = state.iteration_count + 1
-    results = mocked_search(state.primary_question, next_iteration)
+    results = []
+    if state.live_search:
+        try:
+            results = live_medical_search(state.primary_question)
+        except Exception as exc:
+            state.inaccessible_sources.append({"source_id": "live_medical_search", "reason": str(exc)})
+    if not results:
+        results = mocked_search(state.primary_question, next_iteration)
+        if state.live_search:
+            state.unknowns.append("Live search returned no usable results; mock fallback was used for this run.")
     known_source_ids = {source["source_id"] for source in state.discovered_sources}
     for result in results:
         if result["source_id"] not in known_source_ids:
@@ -304,6 +314,8 @@ def build_research_graph():
 def run_research_graph(state: ResearchState) -> ResearchState:
     result = build_research_graph().invoke({"research": state.model_dump(mode="json")})
     return ResearchState.model_validate(result["research"])
+
+
 
 
 

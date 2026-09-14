@@ -139,6 +139,7 @@ class EvidenceClaim(BaseModel):
 class ResearchState(BaseModel):
     research_id: str = Field(default_factory=lambda: new_id("research"))
     original_user_request: str
+    live_search: bool = False
     mode: ResearchMode = ResearchMode.EVIDENCE_REVIEW
     explored_idea: str | None = None
     mechanism_map: list[str] = Field(default_factory=list)
@@ -175,7 +176,10 @@ class ResearchState(BaseModel):
 
 class ResearchCreateRequest(BaseModel):
     question: str
+    live_search: bool = True
     mode: ResearchMode = ResearchMode.EVIDENCE_REVIEW
+
+
 
 
 

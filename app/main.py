@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from app.schemas.research import ResearchCreateRequest, ResearchState
 from app.storage import ResearchStore, init_db
@@ -11,6 +12,10 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Research Manager", version="0.1.0")
     store = ResearchStore()
 
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse("app/static/index.html")
+
     @app.on_event("startup")
     def startup() -> None:
         init_db()
@@ -18,7 +23,7 @@ def create_app() -> FastAPI:
     @app.post("/research", response_model=ResearchState)
     def create_research(request: ResearchCreateRequest) -> ResearchState:
         init_db()
-        state = ResearchState(original_user_request=request.question, mode=request.mode)
+        state = ResearchState(original_user_request=request.question, mode=request.mode, live_search=request.live_search)
         state = run_research_graph(state)
         return store.save(state)
 
@@ -50,5 +55,8 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+
 
 

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Research Manager</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f7f8fa; color: #16202a; }
+    main { max-width: 980px; margin: 0 auto; padding: 32px 18px; }
+    h1 { margin: 0 0 18px; font-size: 30px; }
+    label { display: block; font-weight: 700; margin: 16px 0 8px; }
+    textarea { width: 100%; min-height: 130px; padding: 12px; font: inherit; border: 1px solid #bcc6d0; border-radius: 6px; box-sizing: border-box; }
+    select, button { font: inherit; padding: 10px 12px; border-radius: 6px; border: 1px solid #9aa8b5; }
+    button { background: #155eef; color: white; border-color: #155eef; cursor: pointer; font-weight: 700; }
+    button:disabled { opacity: .65; cursor: wait; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .check { display: inline-flex; gap: 8px; align-items: center; font-weight: 400; margin: 0; }
+    pre { white-space: pre-wrap; background: white; border: 1px solid #d7dde3; border-radius: 6px; padding: 16px; overflow: auto; }
+    .meta { color: #52606d; font-size: 14px; }
+    .error { color: #b42318; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Research Manager</h1>
+    <label for="question">Research question or idea</label>
+    <textarea id="question">Could gut inflammation connect autoimmune disease and Parkinson's disease?</textarea>
+    <div class="row">
+      <select id="mode">
+        <option value="EVIDENCE_REVIEW">Evidence review</option>
+        <option value="IDEA_EXPLORATION">Idea exploration</option>
+      </select>
+      <label class="check"><input id="live" type="checkbox" checked /> Live PubMed / ClinicalTrials search</label>
+      <button id="run">Run research</button>
+    </div>
+    <p id="status" class="meta"></p>
+    <pre id="report">Report will appear here.</pre>
+  </main>
+  <script>
+    const run = document.getElementById('run');
+    const statusEl = document.getElementById('status');
+    const report = document.getElementById('report');
+    run.addEventListener('click', async () => {
+      run.disabled = true;
+      statusEl.textContent = 'Running research...';
+      report.className = '';
+      try {
+        const response = await fetch('/research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: document.getElementById('question').value,
+            mode: document.getElementById('mode').value,
+            live_search: document.getElementById('live').checked
+          })
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const data = await response.json();
+        statusEl.textContent = `Research ID: ${data.research_id} | sources: ${data.included_studies.length}`;
+        report.textContent = data.final_report || JSON.stringify(data, null, 2);
+      } catch (error) {
+        statusEl.textContent = 'Failed';
+        report.className = 'error';
+        report.textContent = String(error);
+      } finally {
+        run.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
